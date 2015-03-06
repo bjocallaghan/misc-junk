@@ -52,7 +52,10 @@ experiment with NUM-LOCKERS lockers."
 
 (defun locker-experiment-efficient (num-lockers)
   "Efficiently returns number of open lockers after doing a crazy-principal
-locker experiment with NUM-LOCKERS lockers."
+locker experiment with NUM-LOCKERS lockers.
+
+Found a pattern that I don't fully understand, but here it is translated into an
+algorithm. [later edit: see locker-experiment-super-efficient]"
   (do ((i 1 (1+ i))
        (next-sum 3 (+ next-sum (* 2 (1+ i)) 1)))
       ((>= next-sum num-lockers) i)))
@@ -60,10 +63,27 @@ locker experiment with NUM-LOCKERS lockers."
 ;; CL-USER> (locker-experiment-efficient 1000)
 ;; 31
 
+(defun locker-experiment-super-efficient (num-lockers)
+  "Efficiently returns number of open lockers after doing a crazy-principal
+locker experiment with NUM-LOCKERS lockers.
+
+A locker is flipped as many times as the number of factors it has. If it has an
+even number of factors, in its final stage it will remain in a closed state. If
+it has an odd number of factors, in its final stage it will be open. The only
+numbers that have an odd number of factors are the perfect squares. Therefore,
+if you take the square root of any given number, that is the number of perfect
+squares equal or less than that number, and therefore, the answer to this
+question."
+  (isqrt num-lockers))
+
+;; CL-USER> (locker-experiment-super-efficient 1000)
+;; 31
+
 ;; CL-USER> (loop for i from 1 to 1000
-;;              always (= (locker-experiment i)
-;;                        (locker-experiment-simplified i)
-;;                        (locker-experiment-efficient i)))
+;;               always (= (locker-experiment i)
+;;                         (locker-experiment-simplified i)
+;;                         (locker-experiment-efficient i)
+;;                         (locker-experiment-super-efficient i)))
 ;; T
 
 ;; CL-USER> (time (dotimes (i 100000) (locker-experiment 1000)))
@@ -91,4 +111,12 @@ locker experiment with NUM-LOCKERS lockers."
 ;;   86.67% CPU
 ;;   314,414,578 processor cycles
 ;;   0 bytes consed
+;; NIL
+;; CL-USER> (time (dotimes (i 100000) (locker-experiment-super-efficient 1000)))
+;; Evaluation took:
+;;   0.020 seconds of real time
+;;   0.015600 seconds of total run time (0.015600 user, 0.000000 system)
+;;   80.00% CPU
+;;   53,744,837 processor cycles
+;;   0 bytes consed  
 ;; NIL
