@@ -1,0 +1,6 @@
+(flet ((msg (text rtn-val)
+         (format t "~a~%" text) rtn-val))
+  (msg "------" nil)
+  (do ((i (msg "assigning" 1) (msg "incrementing" (1+ i))))
+      ((= 4 (msg "testing" i)) (msg "finalizing" i))
+    (msg "body" nil)))
