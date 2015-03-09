@@ -120,3 +120,11 @@ question."
 ;;   53,744,837 processor cycles
 ;;   0 bytes consed  
 ;; NIL
+
+(ql:quickload :rt)
+(rt:deftest all-methods-equal
+    (loop for i from 1 to 1000
+       always (= (locker-experiment i)
+                 (locker-experiment-simplified i)
+                 (locker-experiment-efficient i)
+                 (locker-experiment-super-efficient i))) t)
