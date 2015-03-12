@@ -1,3 +1,20 @@
+(defclass bank-account (account)
+  (customer-name
+   balance))
+
+(defclass checking-account (bank-account) ())
+
+(defclass savings-account (bank-account) ())
+
+(defclass overdraft-account (account) ())
+
+(defgeneric balance (account))
+
+(defmethod ((account bank-account
+  (slot-value account 'balance))
+
+(
+
 (defgeneric withdraw (account amount)
   (:documentation "Withdraw the specified AMOUNT from the ACCOUNT.
 Signal an error if the current balance is less than the AMOUNT."))
@@ -13,15 +30,7 @@ Signal an error if the current balance is less than the AMOUNT."))
       (withdraw (overdraft-account account) overdraft)
       (incf (balance account) overdraft))))
 
-(defmethod withdraw :before ((account (eql *account-of-bank-president*)) amount)
-  (let ((overdraft (- amount (balance account))))
-    (when (plusp overdraft)
-      (incf (balance account) (embezzle *bank* overdraft)))))
-
-(defclass bank-account ()
-  (customer-name
-   balance))
-
-(defclass checking-account (bank-account))
-
-(defclass savings-account (bank-account))
+;; (defmethod withdraw :before ((account (eql *account-of-bank-president*)) amount)
+;;   (let ((overdraft (- amount (balance account))))
+;;     (when (plusp overdraft)
+;;       (incf (balance account) (embezzle *bank* overdraft)))))
