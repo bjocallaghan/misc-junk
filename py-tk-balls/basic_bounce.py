@@ -5,14 +5,13 @@ CANVAS_WIDTH = 600
 CANVAS_HEIGHT = 390
 
 class Ball:
-    def __init__(self, container):
+    def __init__(self):
         self.x = 0
         self.y = 0
         self.dx = 2
         self.dy = 2
         self.radius = 3
         self.color = "#ff0000"
-        self.container = container
     def update(self):
         if not (0 <= self.x <= CANVAS_WIDTH): self.dx *= -1
         if not (0 <= self.y <= CANVAS_HEIGHT): self.dy *= -1
