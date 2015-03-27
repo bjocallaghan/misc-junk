@@ -1,9 +1,9 @@
 from Tkinter import *
 from time import sleep, time
-from random import randint, choice
+from random import randint, choice, random
 import math
 
-NUM_BALLS = 500
+NUM_BALLS = 350
 
 CANVAS_WIDTH = 1000
 CANVAS_HEIGHT = 600
@@ -47,6 +47,9 @@ class GravityBall(Ball):
     def __init__(self, **kwargs):
         Ball.__init__(self, **kwargs)
         self.max_speed = math.sqrt(self.dy**2 + 2 * abs(self.y * G_CONSTANT * TARGET_FPS))
+        self.temp_max_speed = random() * self.max_speed
+        self.hue = get_random_hue_values()
+        self.color = rgb_to_color_string(self.hue)
     def update(self):
         if not (0 <= self.x <= CANVAS_WIDTH): self.dx *= -1
         self.x += (self.dx / TARGET_FPS)
@@ -55,7 +58,12 @@ class GravityBall(Ball):
         self.y += (self.dy / TARGET_FPS)
         if self.y < 0:
             self.y = 0
-            self.dy = self.max_speed
+            self.temp_max_speed *= .8
+            if self.temp_max_speed < .2 * self.max_speed: self.temp_max_speed = self.max_speed
+            self.dy = self.temp_max_speed
+
+        color_multiplier = math.sqrt(1 - (abs(self.dy) / self.max_speed))
+        self.color = rgb_to_color_string([color_multiplier*x for x in self.hue])
         
 class VisualBall(GravityBall):
     def __init__(self, canvas, **kwargs):
@@ -67,6 +75,7 @@ class VisualBall(GravityBall):
         GravityBall.update(self)
         # tk-note: canvas.coords with two arguments is a setter operation
         canvas.coords(self.ownHandleOnCanvas, self.bbox())  # non-intuitive, see documentation
+        canvas.itemconfig(self.ownHandleOnCanvas, fill=self.color)
 
 class TimeStepCanvas(Canvas):
     def __init__(self, parent, timestep, **kwargs):
@@ -125,6 +134,13 @@ def get_random_color():
     for i in range(6):
         color += choice("0123456789abcdef")
     return color
+
+def get_random_hue_values():
+    random_color_values = (randint(1,255), randint(1,255), randint(1,255))
+    return [int(255*float(x)/max(random_color_values)) for x in random_color_values]
+
+def rgb_to_color_string(rgb_values):
+    return '#%02x%02x%02x' % tuple(rgb_values)
 
 DY_DEBUG_BOX = None
 DEBUG_BOX_2 = None
