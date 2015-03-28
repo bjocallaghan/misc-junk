@@ -25,7 +25,7 @@ if __name__ == '__main__':
     canvas = Canvas(window, bg="white", width=CANVAS_WIDTH, height=CANVAS_HEIGHT)
     canvas.pack()
 
-    add_ball_button = Button(window, text="Add", command=lambda:balls.append(Ball(canvas)))
+    add_ball_button = Button(window, text="Add", command=lambda:balls.append(Ball()))
     add_ball_button.pack()
     
     while True:
