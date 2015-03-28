@@ -5,6 +5,9 @@ import math
 
 NUM_BALLS = 60
 
+MIN_RADIUS = 2
+MAX_RADIUS = 15
+
 CANVAS_WIDTH = 1000
 CANVAS_HEIGHT = 600
 
@@ -13,15 +16,16 @@ G_CONSTANT = -500.0
 
 
 class Ball:
-    def __init__(self, **kwargs):
+    def __init__(self, time_step, **kwargs):
         # location
-        self.x = kwargs.get('x', randint(0, CANVAS_WIDTH))
-        self.y = kwargs.get('y', randint(0, CANVAS_HEIGHT))
+        self.x = kwargs.get('x', randint(MAX_RADIUS, CANVAS_WIDTH-MAX_RADIUS))
+        self.y = kwargs.get('y', randint(MAX_RADIUS, CANVAS_HEIGHT-MAX_RADIUS))
         # delta/speed
         self.dx = kwargs.get('dx', randint(-500, 500))
         self.dy = kwargs.get('dy', randint(-200, 200))
         # non-changing ball attributes
-        self.radius = kwargs.get('radius', randint(2, 15))
+        self.radius = kwargs.get('radius', randint(MIN_RADIUS, MAX_RADIUS))
+        self.time_step = time_step
         # energy calculations
         energy = abs(self.y * G_CONSTANT) + .5 * self.dy**2
         self.max_speed = math.sqrt(2 * energy)
@@ -31,12 +35,12 @@ class Ball:
         self.color = rgb_to_color(self.hue)
 
     def update(self):
-        self.x += (self.dx / TARGET_FPS)
+        self.x += (self.dx * self.time_step)
         if not (self.radius <= self.x <= CANVAS_WIDTH-self.radius):
             self.dx *= -1
 
-        self.dy += G_CONSTANT / TARGET_FPS
-        self.y += (self.dy / TARGET_FPS)
+        self.dy += G_CONSTANT * self.time_step
+        self.y += (self.dy * self.time_step)
         if (self.y-self.radius) < 0:
             self.y = self.radius
             self.temp_max_speed *= .8
@@ -52,8 +56,8 @@ class Ball:
 
 
 class VisualBall(Ball):
-    def __init__(self, canvas, **kwargs):
-        Ball.__init__(self, **kwargs)
+    def __init__(self, canvas, time_step, **kwargs):
+        Ball.__init__(self, time_step, **kwargs)
         self.canvas_handle = canvas.create_oval(tuple(self.bbox()),
                                                 fill=self.color)
 
@@ -96,7 +100,7 @@ class TimeStepCanvas(Canvas):
 class FPS_Canvas(TimeStepCanvas):
     def __init__(self, parent, target_fps, drop_limit=10, **kwargs):
         self.frame = Frame(parent)
-        TimeStepCanvas.__init__(self, self.frame, 1.0 / target_fps,
+        TimeStepCanvas.__init__(self, self.frame, 1.0/target_fps,
                                 drop_limit, **kwargs)
         self.fps_readout = Entry(self.frame)
         self.target_fps = target_fps
@@ -152,7 +156,7 @@ if __name__ == '__main__':
     # balls
     balls = []
     for i in range(NUM_BALLS):
-        balls.append(VisualBall(canvas))
+        balls.append(VisualBall(canvas, 1.0/TARGET_FPS))
 
     # animation loop
     while True:
