@@ -12,19 +12,19 @@
 
 (defgeneric add-actor (environment actor))
 (defgeneric update (object))
-(defgeneric draw (actor cr))
-(defgeneric draw-label (actor cr))
+(defgeneric draw (cr object))
+(defgeneric draw-label (cr actor))
 (defgeneric herd (sheep))
 
 (defclass actor ()
   ((x
     :initarg :x
     :accessor x
-    :initform (random +drawing-area-width+))
+    :initform (error "must supply x coordinate"))
    (y
     :initarg :y
     :accessor y
-    :initform (random +drawing-area-height+))
+    :initform (error "must supply y coordinate"))
    (name
     :initarg :name
     :accessor name
@@ -113,10 +113,10 @@
                                ((eq (status sheep) 'content) .1))))
   (call-next-method))
 
-(defmethod draw :around (object cr)
+(defmethod draw :around (cr object)
   (when cr (call-next-method)))
 
-(defmethod draw (actor cr)
+(defmethod draw (cr actor)
   (cairo-set-source-rgb cr 0.8 0.4 0.2)
   (cairo-arc cr (x actor) (- +drawing-area-height+ (y actor)) 5 0 (* 2 pi))
   (cairo-fill cr)
@@ -124,9 +124,9 @@
   (cairo-set-line-width cr 1)
   (cairo-arc cr (x actor) (- +drawing-area-height+ (y actor)) 5 0 (* 2 pi))
   (cairo-stroke cr)
-  (draw-label actor cr))
+  (draw-label cr actor))
 
-(defmethod draw :after ((actor mover) cr)
+(defmethod draw :after (cr (actor mover))
   (cairo-set-source-rgb cr 0.0 0.0 1.0)
   (cairo-set-line-width cr 3.0)
   (cairo-move-to cr (x actor) (- +drawing-area-height+ (y actor)))
@@ -137,11 +137,11 @@
                       (+ (y actor) (* lead-length (sin (heading actor)))))))
   (cairo-stroke cr))
 
-(defmethod draw-label (actor cr)
+(defmethod draw-label (cr actor)
   (draw-text cr (x actor) (y actor)
              (format nil "~a" actor)))
 
-(defmethod draw-label ((mover sheep) cr)
+(defmethod draw-label (cr (mover sheep))
   (draw-text cr (x mover) (y mover)
              (format nil "~a: ~a" (name mover) (status mover))))
 
@@ -150,14 +150,6 @@
   (cairo-select-font-face cr "serif" 0 1)
   (cairo-set-font-size cr 10.0)
   (cairo-show-text cr text))
-
-;; (defun make-herd (num-sheep)
-;;   (let (herd)
-;;     (dotimes (i num-sheep)
-;;       (push (make-instance 'sheep :herd nil) herd))
-;;     (dolist (sheep herd)
-;;       (setf (herd sheep) herd))
-;;     herd))
 
 (defun distance (one two)
   (sqrt (+ (expt (- (x one) (x two)) 2)
@@ -224,9 +216,12 @@
   (setf (actors environment) (cons actor (actors environment))))
 
 (defun make-medium-herd-world ()
-  (let ((world (make-instance 'environment :time-step +time-step+)))
+  (let ((world (make-instance 'bounded-environment :time-step +time-step+
+                              :x-min 0 :x-max 0 :y-min 700 :y-max 500)))
     (dotimes (i 25)
-      (add-actor world (make-instance 'sheep)))
+      (let ((x 300)
+            (y 300))
+        (add-actor world (make-instance 'sheep :x x :y y))))
     world))
 
 (defparameter *medium-herd-world* (make-medium-herd-world))
@@ -277,7 +272,7 @@
                              (cairo-set-source-rgb cr 0.1 0.7 0.0)
                              (cairo-paint cr)
                              (dolist (actor (actors environment))
-                               (draw actor cr))
+                               (draw cr actor))
                              (cairo-destroy cr)
                              t)))
        (gtk-container-add window box)
