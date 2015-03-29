@@ -89,7 +89,7 @@
 
 (defun bounce-main ()
   (within-main-loop
-   (let ((runningp nil)
+   (let ((runningp t)
          (balls (loop repeat +num-balls+ collect (make-ball)))
          (window (make-instance 'gtk-window
                                 :type :toplevel
@@ -98,21 +98,29 @@
                                 :width-request +canvas-width+
                                 :height-request +canvas-height+))
          (box (gtk-box-new :vertical 2))
-         (run-button (gtk-button-new-with-label "Start"))
+         (start-button (gtk-button-new-with-label "Start"))
+         (stop-button (gtk-button-new-with-label "Stop"))
          (add-button (gtk-button-new-with-label "Add")))
-     (labels ((update (&optional widget)
+     (labels ((start-animation ()
+                (g-timeout-add (floor (* 1000 +time-step+)) #'update))
+              (update (&optional widget)
                 (declare (ignore widget))
                 (dolist (ball balls) (update-ball ball))
                 (gtk-widget-queue-draw canvas)
-                t))
+                runningp))
        (g-signal-connect window "destroy" (lambda (widget)
                                             (declare (ignore widget))
                                             (leave-gtk-main)))
-       (g-signal-connect run-button "clicked"
+       (g-signal-connect start-button "clicked"
                          (lambda (widget)
                            (declare (ignore widget))
-                           (g-timeout-add (floor (* 1000 +time-step+))
-                                          #'update)))
+                           (unless runningp
+                             (setf runningp t)
+                             (start-animation))))
+       (g-signal-connect stop-button "clicked"
+                         (lambda (widget)
+                           (declare (ignore widget))
+                           (setf runningp nil)))
        (g-signal-connect add-button "clicked"
                          (lambda (widget)
                            (declare (ignore widget))
@@ -131,6 +139,8 @@
                              t)))
        (gtk-container-add window box)
        (gtk-box-pack-start box canvas)
-       (gtk-box-pack-start box run-button)
+       (gtk-box-pack-start box start-button)
+       (gtk-box-pack-start box stop-button)
        (gtk-box-pack-start box add-button)
-       (gtk-widget-show-all window)))))
+       (gtk-widget-show-all window)
+       (start-animation)))))
