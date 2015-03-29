@@ -22,29 +22,7 @@
    (name
     :initarg :name
     :accessor name
-    :initform 'unnamed)
-   (status
-    :initarg :status
-    :accessor status
-    :initform 'unknown)))
-
-(defgeneric draw (actor cr))
-(defgeneric update (actor))
-
-(defmethod draw (actor cr)
-  (cairo-set-source-rgb cr 0.8 0.4 0.2)
-  (cairo-arc cr (x actor) (- +drawing-area-height+ (y actor)) 5 0 (* 2 pi))
-  (cairo-fill cr)
-  (cairo-set-source-rgb cr 0.0 0.0 0.0)
-  (cairo-set-line-width cr 1)
-  (cairo-arc cr (x actor) (- +drawing-area-height+ (y actor)) 5 0 (* 2 pi))
-  (cairo-stroke cr)
-  (cairo-move-to cr (+ 5 (x actor)) (+ 5 (- +drawing-area-height+ (y actor))))
-  (cairo-select-font-face cr "serif" 0 1)
-  (cairo-set-font-size cr 10.0)
-  (cairo-show-text cr (format nil "~a (~a)" (name actor) (status actor))))
-
-(defmethod update (actor))
+    :initform 'unnamed)))
 
 (defclass mover (actor)
   ((direction-fn
@@ -67,31 +45,21 @@
    (status
     :initform 'meandering)))
 
-(defmethod draw ((actor mover) cr)
-  (cairo-set-source-rgb cr 0.0 0.0 1.0)
-  (cairo-set-line-width cr 3.0)
-  (cairo-move-to cr (x actor) (- +drawing-area-height+ (y actor)))
-  (cairo-line-to cr
-                 (+ (x actor) (* 15 (cos (heading actor))))
-                 (- +drawing-area-height+ (+ (y actor) (* 9 (sin (heading actor))))))
-  (cairo-stroke cr)
-  (call-next-method))
-
 (defclass sheep (mover)
   ((herd
     :initarg :herd
     :accessor herd
     :initform (error "Must supply a herd"))
    (name
-    :initform 'sheep)))
+    :initform 'sheep)
+   (status
+    :initarg :status
+    :accessor status
+    :initform 'unknown)))
 
-(defun make-herd (num-sheep)
-  (let (herd)
-    (dotimes (i num-sheep)
-      (push (make-instance 'sheep :herd nil) herd))
-    (dolist (sheep herd)
-      (setf (herd sheep) herd))
-    herd))
+(defgeneric update (actor))
+(defgeneric draw (actor cr))
+(defgeneric draw-label (actor cr))
 
 (defmethod update (mover)
   (when (< (random 1.0) (motivation mover))
@@ -100,10 +68,6 @@
       (setf (heading mover) heading)
       (incf (x mover) (* speed (cos heading)))
       (incf (y mover) (* speed (sin heading))))))
-
-(defun distance (one two)
-  (sqrt (+ (expt (- (x one) (x two)) 2)
-           (expt (- (y one) (y two)) 2))))
 
 (defmethod update ((mover sheep))
   (let* ((others (remove-if (lambda (x) (eq x mover)) (herd mover)))
@@ -144,6 +108,59 @@
                                ((eq (status mover) 'content) .1))))
   (call-next-method))
 
+(defmethod draw (actor cr)
+  (cairo-set-source-rgb cr 0.8 0.4 0.2)
+  (cairo-arc cr (x actor) (- +drawing-area-height+ (y actor)) 5 0 (* 2 pi))
+  (cairo-fill cr)
+  (cairo-set-source-rgb cr 0.0 0.0 0.0)
+  (cairo-set-line-width cr 1)
+  (cairo-arc cr (x actor) (- +drawing-area-height+ (y actor)) 5 0 (* 2 pi))
+  (cairo-stroke cr)
+  (draw-label actor cr))
+
+(defmethod draw :after ((actor mover) cr)
+  (cairo-set-source-rgb cr 0.0 0.0 1.0)
+  (cairo-set-line-width cr 3.0)
+  (cairo-move-to cr (x actor) (- +drawing-area-height+ (y actor)))
+  (let ((lead-length 12))
+    (cairo-line-to cr
+                   (+ (x actor) (* lead-length (cos (heading actor))))
+                   (- +drawing-area-height+
+                      (+ (y actor) (* lead-length (sin (heading actor)))))))
+  (cairo-stroke cr))
+
+(defmethod draw-label (actor cr)
+  (draw-text cr (x actor) (y actor)
+             (format nil "~a" actor)))
+
+(defmethod draw-label ((mover sheep) cr)
+  (draw-text cr (x mover) (y mover)
+             (format nil "~a: ~a" (name mover) (status mover))))
+
+(defun draw-text (cr x y text)
+  (cairo-move-to cr (+ 5 x) (+ 5 (- +drawing-area-height+ y)))
+  (cairo-select-font-face cr "serif" 0 1)
+  (cairo-set-font-size cr 10.0)
+  (cairo-show-text cr text))
+
+(defun make-herd (num-sheep)
+  (let (herd)
+    (dotimes (i num-sheep)
+      (push (make-instance 'sheep :herd nil) herd))
+    (dolist (sheep herd)
+      (setf (herd sheep) herd))
+    herd))
+
+(defun distance (one two)
+  (sqrt (+ (expt (- (x one) (x two)) 2)
+           (expt (- (y one) (y two)) 2))))
+
+(defun bearing (self other)
+  (let ((result (atan (- (y other) (y self)) (- (x other) (x self)))))
+    (if (> (x self) (x other))
+        (+ result pi)
+        result)))
+
 (defun random-heading ()
   (random (* 2 pi)))
 
@@ -163,15 +180,9 @@
     #'(lambda ()
         (+ heading (random .3) -0.15))))
 
-(defun bearing (self other)
-  (let ((result (atan (- (y other) (y self)) (- (x other) (x self)))))
-    (if (> (x self) (x other))
-        (+ result pi)
-        result)))
-
 (defun main ()
   (within-main-loop
-   (let ((runningp nil)
+   (let ((runningp t)
          (actors (make-herd 20))
          (window (make-instance 'gtk-window
                                 :type :toplevel
@@ -212,7 +223,7 @@
                          (lambda (widget cr)
                            (declare (ignore widget))
                            (let ((cr (pointer cr)))
-                             (cairo-set-source-rgb cr 0.2 1.0 0.0)
+                             (cairo-set-source-rgb cr 0.1 0.7 0.0)
                              (cairo-paint cr)
                              (dolist (actor actors) (draw actor cr))
                              (cairo-destroy cr)
