@@ -4,7 +4,7 @@
 
 (in-package :bounce)
 
-(defparameter +num-balls+ 150)
+(defparameter +num-balls+ 100)
 
 (defparameter +canvas-width+ 800)
 (defparameter +canvas-height+ 600)
@@ -41,7 +41,8 @@
                 (<= (getf ball :y) (- +canvas-height+ (getf ball :radius)))))
          (make-ball ()
            (let* ((radius (random-range +min-radius+ +max-radius+))
-                  (y (+ (random +canvas-height+) radius))
+                  (color (random-color))
+                  (y (+ (random +canvas-height+) radius (* .1 +canvas-height+)))
                   (dy (random-range (- +max-dy+) +max-dy+)))
              (list :time-step +time-step+
                    :radius radius
@@ -51,7 +52,8 @@
                    :dy dy
                    :max-speed (sqrt (* 2 (+ (abs (* +g-constant+ (- y radius)))
                                             (* 0.5 dy dy))))
-                   :color (random-color)))))
+                   :color color
+                   :current-color color))))
     (do ((ball (make-ball) (make-ball)))
         ((in-bounds-p ball) ball))))
 
@@ -64,10 +66,14 @@
   (incf (getf ball :y) (* (getf ball :dy) +time-step+))
   (when (< (getf ball :y) (getf ball :radius))
     (setf (getf ball :dy) (getf ball :max-speed))
-    (setf (getf ball :y) (getf ball :radius))))
+    (setf (getf ball :y) (getf ball :radius)))
+  (setf (getf ball :current-color)
+        (mapcar (lambda (x)
+                  (* x (sqrt (- 1 (/ (abs (getf ball :dy)) (getf ball :max-speed))))))
+                (getf ball :color))))
 
 (defun draw-ball (ball cr)
-  (apply #'cairo-set-source-rgb (cons cr (getf ball :color)))
+  (apply #'cairo-set-source-rgb (cons cr (getf ball :current-color)))
   (cairo-arc cr (getf ball :x) (- +canvas-height+ (getf ball :y))
              (getf ball :radius) 0 (* 2 pi))
   (cairo-fill cr)
