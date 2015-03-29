@@ -10,6 +10,12 @@
 (defconstant +target-fps+ 30.0)
 (defconstant +time-step+ (/ +target-fps+))
 
+(defgeneric add-actor (environment actor))
+(defgeneric update (object))
+(defgeneric draw (actor cr))
+(defgeneric draw-label (actor cr))
+(defgeneric herd (sheep))
+
 (defclass actor ()
   ((x
     :initarg :x
@@ -22,7 +28,11 @@
    (name
     :initarg :name
     :accessor name
-    :initform 'unnamed)))
+    :initform 'unnamed)
+   (environment
+    :initarg :environment
+    :accessor environment
+    :initform nil)))
 
 (defclass mover (actor)
   ((direction-fn
@@ -39,74 +49,72 @@
    (max-speed
     :initarg :max-speed
     :accessor max-speed
-    :initform 1.0)
+    :initform 50)
    (name
     :initform 'mover)
    (status
     :initform 'meandering)))
 
 (defclass sheep (mover)
-  ((herd
-    :initarg :herd
-    :accessor herd
-    :initform (error "Must supply a herd"))
-   (name
+  ((name
     :initform 'sheep)
    (status
     :initarg :status
     :accessor status
     :initform 'unknown)))
 
-(defgeneric update (actor))
-(defgeneric draw (actor cr))
-(defgeneric draw-label (actor cr))
+(defmethod herd ((sheep sheep))
+  (actors (environment sheep)))
 
-(defmethod update (mover)
+(defmethod update ((mover mover))
   (when (< (random 1.0) (motivation mover))
     (let ((heading (funcall (direction-fn mover)))
           (speed (max-speed mover)))
       (setf (heading mover) heading)
-      (incf (x mover) (* speed (cos heading)))
-      (incf (y mover) (* speed (sin heading))))))
+      (incf (x mover) (* speed (time-step (environment mover)) (cos heading)))
+      (incf (y mover) (* speed (time-step (environment mover)) (sin heading))))))
 
-(defmethod update ((mover sheep))
-  (let* ((others (remove-if (lambda (x) (eq x mover)) (herd mover)))
-         (nearest (car (sort others #'< :key (lambda (x) (distance x mover)))))
-         (dist (distance nearest mover))
+(defmethod update ((sheep sheep))
+  (let* ((others (remove-if (lambda (x) (eq x sheep)) (herd sheep)))
+         (nearest (car (sort others #'< :key (lambda (x) (distance x sheep)))))
+         (dist (distance nearest sheep))
          (new-status (cond
                            ((> dist 200) 'isolated)
                            ((> dist 60) 'lonely)
                            ((< dist 20) 'crowded)
                            (t 'content))))
-    (unless (eq new-status (status mover))
-      (setf (status mover) new-status)
+    (unless (eq new-status (status sheep))
+      (setf (status sheep) new-status)
       (cond
-        ((eq (status mover) 'isolated)
+        ((eq (status sheep) 'isolated)
          (progn
-           (setf (motivation mover) .2)
-           (setf (direction-fn mover) (make-meander (heading mover)))
+           (setf (motivation sheep) .2)
+           (setf (direction-fn sheep) (make-meander (heading sheep)))
            ))
-        ((eq (status mover) 'lonely)
+        ((eq (status sheep) 'lonely)
          (progn
-           (setf (motivation mover) .4)
-           (setf (direction-fn mover) (make-seek mover nearest))
+           (setf (motivation sheep) .4)
+           (setf (direction-fn sheep) (make-seek sheep nearest))
            ))
-        ((eq (status mover) 'crowded)
+        ((eq (status sheep) 'crowded)
          (progn
-           (setf (motivation mover) .5)
-           (setf (direction-fn mover) (make-avoid mover nearest))
+           (setf (motivation sheep) .5)
+           (setf (direction-fn sheep) (make-avoid sheep nearest))
            ))
-        ((eq (status mover) 'content)
+        ((eq (status sheep) 'content)
          (progn
-           (setf (motivation mover) .1)
-           (setf (direction-fn mover) (make-meander (heading mover)))
+           (setf (motivation sheep) .1)
+           (setf (direction-fn sheep) (make-meander (heading sheep)))
            ))))    
-    (setf (motivation mover) (cond 
-                               ((eq (status mover) 'isolated) .2)
-                               ((eq (status mover) 'lonely) .4)
-                               ((eq (status mover) 'crowded) .3)
-                               ((eq (status mover) 'content) .1))))
+    (setf (motivation sheep) (cond 
+                               ((eq (status sheep) 'isolated) .2)
+                               ((eq (status sheep) 'lonely) .4)
+                               ((eq (status sheep) 'crowded) .3)
+                               ((eq (status sheep) 'content) .1))))
   (call-next-method))
+
+(defmethod draw :around (object cr)
+  (when cr (call-next-method)))
 
 (defmethod draw (actor cr)
   (cairo-set-source-rgb cr 0.8 0.4 0.2)
@@ -143,13 +151,13 @@
   (cairo-set-font-size cr 10.0)
   (cairo-show-text cr text))
 
-(defun make-herd (num-sheep)
-  (let (herd)
-    (dotimes (i num-sheep)
-      (push (make-instance 'sheep :herd nil) herd))
-    (dolist (sheep herd)
-      (setf (herd sheep) herd))
-    herd))
+;; (defun make-herd (num-sheep)
+;;   (let (herd)
+;;     (dotimes (i num-sheep)
+;;       (push (make-instance 'sheep :herd nil) herd))
+;;     (dolist (sheep herd)
+;;       (setf (herd sheep) herd))
+;;     herd))
 
 (defun distance (one two)
   (sqrt (+ (expt (- (x one) (x two)) 2)
@@ -180,10 +188,53 @@
     #'(lambda ()
         (+ heading (random .3) -0.15))))
 
+(defclass environment ()
+  ((actors
+    :initarg :actors
+    :accessor actors
+    :initform nil)
+   (time-step
+    :initarg :time-step
+    :accessor time-step
+    :initform (error "must specify time-step"))))
+
+(defclass bounded-environment (environment)
+  ((x-min
+    :initarg :x-min
+    :accessor x-min
+    :initform (error "must specify boundaries"))
+   (x-max
+    :initarg :x-max
+    :accessor x-max
+    :initform (error "must specify boundaries"))
+   (y-min
+    :initarg :y-min
+    :accessor y-min
+    :initform (error "must specify boundaries"))
+   (y-max
+    :initarg :y-max
+    :accessor y-max
+    :initform (error "must specify boundaries"))))
+
+(defmethod update ((environment environment))
+  (dolist (actor (actors environment)) (update actor)))
+
+(defmethod add-actor ((environment environment) (actor actor))
+  (setf (environment actor) environment)
+  (setf (actors environment) (cons actor (actors environment))))
+
+(defun make-medium-herd-world ()
+  (let ((world (make-instance 'environment :time-step +time-step+)))
+    (dotimes (i 25)
+      (add-actor world (make-instance 'sheep)))
+    world))
+
+(defparameter *medium-herd-world* (make-medium-herd-world))
+
 (defun main ()
   (within-main-loop
    (let ((runningp t)
-         (actors (make-herd 20))
+         (environment *medium-herd-world*)
          (window (make-instance 'gtk-window
                                 :type :toplevel
                                 :title "Village"))
@@ -199,7 +250,7 @@
                 (g-timeout-add (floor (* 1000 +time-step+)) #'update-all))
               (update-all (&optional widget)
                 (declare (ignore widget))
-                (dolist (actor actors) (update actor))
+                (update environment)
                 (gtk-widget-queue-draw drawing-area)
                 runningp))
        (g-signal-connect window "destroy" (lambda (widget)
@@ -225,7 +276,8 @@
                            (let ((cr (pointer cr)))
                              (cairo-set-source-rgb cr 0.1 0.7 0.0)
                              (cairo-paint cr)
-                             (dolist (actor actors) (draw actor cr))
+                             (dolist (actor (actors environment))
+                               (draw actor cr))
                              (cairo-destroy cr)
                              t)))
        (gtk-container-add window box)
