@@ -50,7 +50,27 @@
   ((move-fn
     :initarg :move-fn
     :accessor move-fn
-    :initform (make-meander))))
+    :initform (make-meander))
+   (name
+    :initform 'mover)
+   (status
+    :initform 'meandering)))
+
+(defclass sheep (mover)
+  ((herd
+    :initarg :herd
+    :accessor herd
+    :initform (error "Must supply a herd"))
+   (name
+    :initform 'sheep)))
+
+(defun make-herd (num-sheep)
+  (let (herd)
+    (dotimes (i num-sheep)
+      (push (make-instance 'sheep :herd nil) herd))
+    (dolist (sheep herd)
+      (setf (herd sheep) herd))
+    herd))
 
 (defmethod update (mover)
   (let ((new-coords (funcall (move-fn mover) (x mover) (y mover))))
@@ -58,26 +78,33 @@
     (setf (y mover) (second new-coords))
     (list (x mover) (y mover))))
 
+(defun distance (one two)
+  (sqrt (+ (expt (- (x one) (x two)) 2)
+           (expt (- (y one) (y two)) 2))))
+
+(defmethod update ((mover sheep))
+  (let* ((others (remove-if (lambda (x) (eq x mover)) (herd mover)))
+         (dist (reduce #'min (mapcar (lambda (x) (distance x mover)) others))))
+    (setf (status mover) (cond
+                           ((> dist 100) 'lonely)
+                           ((< dist 20) 'crowded)
+                           (t 'content))))
+  (call-next-method))
+
 (defun make-meander ()
   (flet ((random-direction ()
-           (nth (random 4) '(up down left right))))
+           (random (* 2 pi))))
     (let ((heading (random-direction)))
       #'(lambda (x y)
-          (when (zerop (random 10)) (setf heading (random-direction)))
-          (let ((new-coords (unless (zerop (random 3))
-                              (case heading
-                                (up (list x (1+ y)))
-                                (down (list x (1- y)))
-                                (left (list (1- x) y))
-                                (right (list (1+ x) y))))))
-            (if new-coords
-                new-coords
-                (list x y)))))))
+          (when (zerop (random 20)) (setf heading (random-direction)))
+          (let ((tmp-heading (+ heading (random .3) -0.15)))
+            (list (+ x (cos tmp-heading))
+                  (+ y (sin tmp-heading))))))))
 
 (defun main ()
   (within-main-loop
-   (let ((runningp nil)
-         (actors (loop repeat 30 collect (make-instance 'mover)))
+   (let ((runningp t)
+         (actors (make-herd 40))
          (window (make-instance 'gtk-window
                                 :type :toplevel
                                 :title "Village"))
