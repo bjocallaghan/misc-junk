@@ -4,58 +4,40 @@
 
 (in-package :bounce)
 
-(defparameter +num-balls+ 100)
+(defconstant +num-balls+ 150)
 
-(defparameter +canvas-width+ 800)
-(defparameter +canvas-height+ 600)
-(defparameter +target-fps+ 60.0)
-(defparameter +time-step+ (/ +target-fps+))
+(defconstant +canvas-width+ 800)
+(defconstant +canvas-height+ 600)
+(defconstant +target-fps+ 60.0)
+(defconstant +time-step+ (/ +target-fps+))
 
-(defparameter +max-dx+ (* 1/2 +canvas-width+))
-(defparameter +max-dy+ (* 1/2 +canvas-height+))
+(defconstant +max-dx+ (* 1/2 +canvas-width+))
+(defconstant +max-dy+ (* 1/2 +canvas-height+))
 
-(defparameter +min-radius+ 8)
-(defparameter +max-radius+ 25)
+(defconstant +min-radius+ 8)
+(defconstant +max-radius+ 25)
 
-(defparameter +g-constant+ -1000)
+(defconstant +g-constant+ -1000)
 
-(defun random-range (lower upper)
+(defun random-from-range (lower upper)
+  (declare (type (integer -32000 32000) lower upper))
   (+ lower (random (- upper lower))))
 
-(defun timestamp ()
-  (let ((day-names '("Monday" "Tuesday" "Wednesday"
-                     "Thursday" "Friday" "Saturday" "Sunday")))
-    (multiple-value-bind
-          (second minute hour date month year day-of-week dst-p tz)
-        (get-decoded-time)
-      (declare (ignore dst-p))
-      (format nil "~a ~d/~2,'0d/~d ~2,'0d:~2,'0d:~2,'0d (GMT~@d)"
-              (nth day-of-week day-names) month date
-              year hour minute second (- tz)))))
-
 (defun make-ball ()
-  (flet ((in-bounds-p (ball)
-           (and (>= (getf ball :x) (getf ball :radius))
-                (<= (getf ball :x) (- +canvas-width+ (getf ball :radius)))
-                (>= (getf ball :y) (getf ball :radius))
-                (<= (getf ball :y) (- +canvas-height+ (getf ball :radius)))))
-         (make-ball ()
-           (let* ((radius (random-range +min-radius+ +max-radius+))
-                  (color (random-color))
-                  (y (+ (random +canvas-height+) radius (* .1 +canvas-height+)))
-                  (dy (random-range (- +max-dy+) +max-dy+)))
-             (list :time-step +time-step+
-                   :radius radius
-                   :x (random +canvas-width+)
-                   :y y
-                   :dx (random-range (- +max-dx+) +max-dx+)
-                   :dy dy
-                   :max-speed (sqrt (* 2 (+ (abs (* +g-constant+ (- y radius)))
-                                            (* 0.5 dy dy))))
-                   :color color
-                   :current-color color))))
-    (do ((ball (make-ball) (make-ball)))
-        ((in-bounds-p ball) ball))))
+  (let* ((radius (random-from-range +min-radius+ +max-radius+))
+         (color (random-color))
+         (y (+ (random +canvas-height+) radius (* .1 +canvas-height+)))
+         (dy (random-from-range (- +max-dy+) +max-dy+)))
+    (list :time-step +time-step+
+          :radius radius
+          :x (random-from-range radius (- +canvas-width+ radius))
+          :y y
+          :dx (random-from-range (- +max-dx+) +max-dx+)
+          :dy dy
+          :max-speed (sqrt (* 2 (+ (abs (* +g-constant+ (- y radius)))
+                                   (* 0.5 dy dy))))
+          :color color
+          :current-color color)))
 
 (defun update-ball (ball)
   (incf (getf ball :x) (* (getf ball :dx) +time-step+))
