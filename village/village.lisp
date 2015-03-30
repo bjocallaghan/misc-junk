@@ -61,7 +61,7 @@
    (status
     :initarg :status
     :accessor status
-    :initform 'unknown)))
+    :initform :content)))
 
 (defmethod herd ((sheep sheep))
   (actors (environment sheep)))
@@ -79,44 +79,46 @@
          (nearest (car (sort others #'< :key (lambda (x) (distance x sheep)))))
          (dist (distance nearest sheep))
          (new-status (cond
-                           ((> dist 200) 'isolated)
-                           ((> dist 60) 'lonely)
-                           ((< dist 20) 'crowded)
-                           (t 'content))))
-    (unless (eq new-status (status sheep))
+                           ((> dist 200) :isolated)
+                           ((> dist 60) :lonely)
+                           ((< dist 20) :crowded)
+                           (t :content))))
+    (unless (and (eq new-status (status sheep))
+                 (or (eq (status sheep) :content)
+                     (eq (status sheep) :isolated)))
       (setf (status sheep) new-status)
-      (cond
-        ((eq (status sheep) 'isolated)
+      (ecase (status sheep)
+        (:isolated
          (progn
            (setf (motivation sheep) .2)
            (setf (direction-fn sheep) (make-meander (heading sheep)))
            ))
-        ((eq (status sheep) 'lonely)
+        (:lonely
          (progn
            (setf (motivation sheep) .4)
            (setf (direction-fn sheep) (make-seek sheep nearest))
            ))
-        ((eq (status sheep) 'crowded)
+        (:crowded
          (progn
            (setf (motivation sheep) .5)
            (setf (direction-fn sheep) (make-avoid sheep nearest))
            ))
-        ((eq (status sheep) 'content)
+        (:content
          (progn
            (setf (motivation sheep) .1)
            (setf (direction-fn sheep) (make-meander (heading sheep)))
            ))))    
     (setf (motivation sheep) (cond 
-                               ((eq (status sheep) 'isolated) .2)
-                               ((eq (status sheep) 'lonely) .4)
-                               ((eq (status sheep) 'crowded) .3)
-                               ((eq (status sheep) 'content) .1))))
+                               ((eq (status sheep) :isolated) .2)
+                               ((eq (status sheep) :lonely) .4)
+                               ((eq (status sheep) :crowded) .3)
+                               ((eq (status sheep) :content) .1))))
   (call-next-method))
 
 (defmethod draw :around (cr object)
   (when cr (call-next-method)))
 
-(defmethod draw (cr actor)
+(defmethod draw (cr (actor actor))
   (cairo-set-source-rgb cr 0.8 0.4 0.2)
   (cairo-arc cr (x actor) (- +drawing-area-height+ (y actor)) 5 0 (* 2 pi))
   (cairo-fill cr)
@@ -126,8 +128,22 @@
   (cairo-stroke cr)
   (draw-label cr actor))
 
+(defmethod draw (cr (sheep sheep))
+  (let ((color (ecase (status sheep)
+                 (:content '(1.0 1.0 1.0))
+                 (:crowded '(1.0 0.0 0.0))
+                 (:lonely '(0.6 0.6 1.0))
+                 (:isolated '(0.0 0.0 1.0)))))
+    (apply #'cairo-set-source-rgb (cons cr color))
+    (cairo-arc cr (x sheep) (- +drawing-area-height+ (y sheep)) 5 0 (* 2 pi))
+    (cairo-fill cr)
+    (cairo-set-source-rgb cr 0.0 0.0 0.0)
+    (cairo-set-line-width cr 1)
+    (cairo-arc cr (x sheep) (- +drawing-area-height+ (y sheep)) 5 0 (* 2 pi))
+    (cairo-stroke cr)))
+
 (defmethod draw :after (cr (actor mover))
-  (cairo-set-source-rgb cr 0.0 0.0 1.0)
+  (cairo-set-source-rgb cr 1.0 0.0 1.0)
   (cairo-set-line-width cr 3.0)
   (cairo-move-to cr (x actor) (- +drawing-area-height+ (y actor)))
   (let ((lead-length 12))
@@ -156,10 +172,28 @@
            (expt (- (y one) (y two)) 2))))
 
 (defun bearing (self other)
-  (let ((result (atan (- (y other) (y self)) (- (x other) (x self)))))
-    (if (> (x self) (x other))
-        (+ result pi)
-        result)))
+  (atan (- (y other) (y self)) (- (x other) (x self))))
+
+(defun bearing-test ()
+  "I'm not confident bearing is working right. Need to do some coding. Not
+using :rt, because I don't have that package and am not connected to the
+Internet."
+  (let ((s1 (make-instance 'actor :x 100 :y 100))
+        (s2 (make-instance 'actor :x 100 :y 200))
+        (s3 (make-instance 'actor :x 200 :y 100))
+        (s4 (make-instance 'actor :x 200 :y 200)))
+    (format t "~&s1 s2 should be ~3d: ~a" 90 (* 180 (/ pi) (bearing s1 s2)))
+    (format t "~&s1 s2 should be ~3d: ~a" 270 (* 180 (/ pi) (bearing s2 s1)))
+    (format t "~&s1 s2 should be ~3d: ~a" 0 (* 180 (/ pi) (bearing s1 s3)))
+    (format t "~&s1 s2 should be ~3d: ~a" 180 (* 180 (/ pi) (bearing s3 s1)))
+    (format t "~&s1 s2 should be ~3d: ~a" 45 (* 180 (/ pi) (bearing s1 s4)))
+    (format t "~&s1 s2 should be ~3d: ~a" 225 (* 180 (/ pi) (bearing s4 s1)))
+    (format t "~&s1 s2 should be ~3d: ~a" 315 (* 180 (/ pi) (bearing s2 s3)))
+    (format t "~&s1 s2 should be ~3d: ~a" 135 (* 180 (/ pi) (bearing s3 s2)))
+    (format t "~&s1 s2 should be ~3d: ~a" 0 (* 180 (/ pi) (bearing s2 s4)))
+    (format t "~&s1 s2 should be ~3d: ~a" 180 (* 180 (/ pi) (bearing s4 s2)))
+    (format t "~&s1 s2 should be ~3d: ~a" 90 (* 180 (/ pi) (bearing s3 s4)))
+    (format t "~&s1 s2 should be ~3d: ~a" 270 (* 180 (/ pi) (bearing s4 s3)))))
 
 (defun random-heading ()
   (random (* 2 pi)))
@@ -176,7 +210,7 @@
         (+ heading (random .3) -0.15))))
 
 (defun make-avoid (self friend)
-  (let ((heading (- (bearing self friend))))
+  (let ((heading (+ pi (bearing self friend))))
     #'(lambda ()
         (+ heading (random .3) -0.15))))
 
@@ -217,19 +251,47 @@
 
 (defun make-medium-herd-world ()
   (let ((world (make-instance 'bounded-environment :time-step +time-step+
-                              :x-min 0 :x-max 0 :y-min 700 :y-max 500)))
-    (dotimes (i 25)
-      (let ((x 300)
-            (y 300))
+                              :x-min 0 :y-min 0 :x-max 700 :y-max 500)))
+    (dotimes (i 20)
+      (let ((x (+ 50 (random 600)))
+            (y (+ 50 (random 400))))
         (add-actor world (make-instance 'sheep :x x :y y))))
     world))
 
 (defparameter *medium-herd-world* (make-medium-herd-world))
 
+(defun make-two-crowded-sheep-world ()
+  (let ((world (make-instance 'bounded-environment :time-step +time-step+
+                              :x-min 0 :y-min 0 :x-max 700 :y-max 500)))
+    (add-actor world (make-instance 'sheep :x 300 :y 300))
+    (add-actor world (make-instance 'sheep :x 305 :y 300))
+    world))
+
+(defparameter *two-crowded-sheep-world* (make-two-crowded-sheep-world))
+
+(defun make-nucleated-sheep-world ()
+  (let ((world (make-instance 'bounded-environment :time-step +time-step+
+                              :x-min 0 :y-min 0 :x-max 700 :y-max 500)))
+    (dotimes (i 8) (add-actor world (make-instance 'sheep :x (+ i 200) :y 150)))
+    (dotimes (i 8) (add-actor world (make-instance 'sheep :x (+ i 350) :y 350)))
+    (dotimes (i 8) (add-actor world (make-instance 'sheep :x (+ i 500) :y 150)))
+    world))
+
+(defparameter *nucleated-sheep-world* (make-nucleated-sheep-world))
+
+;; (defclass environment-window (gtk-window)
+;;   ((runningp
+;;     :initarg :runningp
+;;     :accessor runningp
+;;     :initform t)
+;;    (
+
 (defun main ()
   (within-main-loop
    (let ((runningp t)
-         (environment *medium-herd-world*)
+         ;(environment *medium-herd-world*)
+         ;(environment *two-crowded-sheep-world*)
+         (environment *nucleated-sheep-world*)
          (window (make-instance 'gtk-window
                                 :type :toplevel
                                 :title "Village"))
