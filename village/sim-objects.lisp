@@ -5,6 +5,7 @@
 (defgeneric draw-label (cr actor))
 (defgeneric draw-heading-indicator (cr object))
 (defgeneric herd (sheep))
+(defgeneric expiredp (behavior current-time))
 
 (defclass actor (wired-object)
   ((x
@@ -25,25 +26,18 @@
     :initform nil)))
 
 (defclass mover (actor)
-  ((direction-fn
-    :initarg :direction-fn
-    :accessor direction-fn
-    :initform (make-meander))
-   (motivation
-    :initarg :motivation
-    :accessor motivation
-    :initform 1.0)
+  (
+   (behavior
+    :accessor behavior
+    :initform nil)
    (heading
     :accessor heading
     :initform (random-heading))
    (max-speed
     :initarg :max-speed
     :accessor max-speed
-    :initform 50)
-   (name
-    :initform 'mover)
-   (status
-    :initform 'meandering)))
+    :initform (error "must supply a max speed"))
+))
 
 (defclass sheep (mover)
   ((name
@@ -52,6 +46,8 @@
     :initarg :size
     :accessor size
     :initform (+ 5 (random 2)))
+   (max-speed
+    :initform 25)
    (status
     :initarg :status
     :accessor status
@@ -71,53 +67,104 @@
   (actors (environment sheep)))
 
 (defmethod update ((mover mover))
-  (when (< (random 1.0) (motivation mover))
-    (let ((heading (funcall (direction-fn mover)))
-          (speed (max-speed mover)))
-      (setf (heading mover) heading)
-      (incf (x mover) (* speed (time-step (environment mover)) (cos heading)))
-      (incf (y mover) (* speed (time-step (environment mover)) (sin heading))))))
+  (with-slots (x y max-speed environment heading behavior) mover
+    (when (< (random 1.0) (motivation behavior))
+      (let ((new-heading (funcall (direction-fn behavior)))
+            (time-step (time-step environment)))
+        (setf heading new-heading)
+        (incf x (* max-speed time-step (cos new-heading)))
+        (incf y (* max-speed time-step (sin new-heading)))))))
 
-(defmethod update ((sheep sheep))
+(defclass behavior ()
+  ((name
+    :initarg :name
+    :accessor name
+    :initform (error "must supply a name for this behavior"))
+   (direction-fn
+    :initarg :direction-fn
+    :accessor direction-fn
+    :initform (error "must supply a movement function"))
+   (motivation
+    :initarg :motivation
+    :accessor motivation
+    :initform 1.0)
+   (expiration
+    :initarg :expiration
+    :accessor expiration
+    :initform (error "must supply expiration"))))
+
+(defun behavior-new (name motivation expiration direction-fn)
+  (make-instance 'behavior 
+                 :name name
+                 :motivation motivation
+                 :expiration expiration
+                 :direction-fn direction-fn))
+
+(defmethod expiredp ((behavior behavior) current-time)
+  (>= current-time (expiration behavior)))
+
+(defgeneric evaluate-situation (mover))
+
+(defmethod evaluate-situation ((sheep sheep))
   (let* ((others (remove-if (lambda (x) (eq x sheep)) (herd sheep)))
          (nearest (car (sort others #'< :key (lambda (x) (distance x sheep)))))
-         (dist (distance nearest sheep))
-         (new-status (cond
-                           ((> dist 200) :isolated)
-                           ((> dist 60) :lonely)
-                           ((< dist 20) :crowded)
-                           (t :content))))
-    (unless (and (eq new-status (status sheep))
-                 (or (eq (status sheep) :content)
-                     (eq (status sheep) :isolated)))
-      (setf (status sheep) new-status)
-      (ecase (status sheep)
-        (:isolated
-         (progn
-           (setf (motivation sheep) .2)
-           (setf (direction-fn sheep) (make-meander (heading sheep)))
-           ))
-        (:lonely
-         (progn
-           (setf (motivation sheep) .4)
-           (setf (direction-fn sheep) (make-seek sheep nearest))
-           ))
-        (:crowded
-         (progn
-           (setf (motivation sheep) .5)
-           (setf (direction-fn sheep) (make-avoid sheep nearest))
-           ))
-        (:content
-         (progn
-           (setf (motivation sheep) .1)
-           (setf (direction-fn sheep) (make-meander (heading sheep)))
-           ))))    
-    (setf (motivation sheep) (cond
-                               ((eq (status sheep) :isolated) .2)
-                               ((eq (status sheep) :lonely) .4)
-                               ((eq (status sheep) :crowded) .3)
-                               ((eq (status sheep) :content) .05))))
-  (call-next-method))
+         (distance-to-nearest (distance nearest sheep))
+         (current-time (runtime (environment sheep))))
+    (with-slots (status behavior heading) sheep
+      (setf status (cond
+                     ((> distance-to-nearest 75) :isolated)
+                     ((> distance-to-nearest 60) :lonely)
+                     ((< distance-to-nearest 20) :crowded)
+                     (t :content)))
+      (setf behavior
+            (case status
+              (:content (behavior-new "meandering" .15 (+ 8 current-time)
+                                      (make-meander-fn heading)))
+              (:isolated (behavior-new "lost" .25 (+ 1 current-time)
+                                      (make-meander-fn heading)))
+              (:lonely (behavior-new "rejoining flock" .3 (+ 2 current-time)
+                                      (make-seek-fn sheep nearest)))
+              (:crowded (behavior-new "moving away" .4 (+ .5 current-time)
+                                      (make-avoid-fn sheep nearest))))))))
+
+(defmethod evaluate-situation ((baby baby-sheep))
+  (with-slots (status behavior heading environment parent) baby
+    (let ((distance-to-parent (distance parent baby))
+          (current-time (runtime environment)))
+      (setf status (cond
+                     ((> distance-to-parent 40) :separated)
+                     ((> distance-to-parent 30) :too-far)
+                     (t :content)))
+      (setf behavior
+            (case status
+              (:content (behavior-new "meandering" .4 (+ 4 current-time)
+                                      (make-meander-fn heading)))
+              (:separated (behavior-new "separated" .7 (+ 1 current-time)
+                                        (make-meander-fn heading)))
+              (:too-far (behavior-new "returning" .6 (+ 1 current-time)
+                                        (make-seek-fn baby parent))))))))
+
+(defmethod update ((sheep sheep))
+  (with-slots (environment behavior expiration) sheep
+    (when (or (null behavior) (expiredp behavior (runtime environment)))
+      (evaluate-situation sheep))
+    (call-next-method)))
+
+(defun make-meander-fn (&optional heading)
+  (let ((heading (if (null heading) (random-heading) heading)))
+    #'(lambda ()
+        (when (zerop (random 20)) (setf heading (random-heading)))
+        (+ heading (random .3) -0.15))))
+
+(defun make-seek-fn (self friend)
+  (let ((heading (bearing self friend)))
+    #'(lambda ()
+        (+ heading (random .3) -0.15))))
+
+(defun make-avoid-fn (self friend)
+  (let ((heading (+ pi (bearing self friend))))
+    #'(lambda ()
+        (+ heading (random .3) -0.15))))
 
 (defmethod draw (cr (actor actor))
   (cairo-set-source-color cr deep-green)
@@ -136,11 +183,11 @@
 (defmethod draw (cr (sheep sheep))
   (cairo-save cr)
   (with-slots (x y heading status size) sheep
-    (let ((color (ecase status
-                   (:content white)
+    (let ((color (case status
                    (:crowded red)
                    (:lonely light-blue)
-                   (:isolated dark-blue))))
+                   (:isolated dark-blue)
+                   (otherwise white))))
       (cairo-translate cr x y)
       (let ((head-size (* .5 size))
             (head-location (* .9 size)))
@@ -200,22 +247,6 @@
 
 (defun random-heading ()
   (random (* 2 pi)))
-
-(defun make-meander (&optional heading)
-  (let ((heading (if (null heading) (random-heading) heading)))
-    #'(lambda ()
-        (when (zerop (random 20)) (setf heading (random-heading)))
-        (+ heading (random .3) -0.15))))
-
-(defun make-seek (self friend)
-  (let ((heading (bearing self friend)))
-    #'(lambda ()
-        (+ heading (random .3) -0.15))))
-
-(defun make-avoid (self friend)
-  (let ((heading (+ pi (bearing self friend))))
-    #'(lambda ()
-        (+ heading (random .3) -0.15))))
 
 (defclass environment ()
   ((actors

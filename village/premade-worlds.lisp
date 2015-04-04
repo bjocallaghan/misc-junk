@@ -27,6 +27,12 @@
     (dotimes (i 8) (add-actor world (make-instance 'sheep :x (+ i 200) :y 150)))
     (dotimes (i 8) (add-actor world (make-instance 'sheep :x (+ i 350) :y 350)))
     (dotimes (i 8) (add-actor world (make-instance 'sheep :x (+ i 500) :y 150)))
+    (let ((mamas (mapcar (lambda (x) (nth x (actors world))) '(4 6 12 20 21))))
+      (dolist (mama mamas)
+        (with-slots (x y) mama
+          (dotimes (i (1+ (random 2)))
+            (add-actor world (make-instance 'baby-sheep
+                                            :x x :y y :parent mama))))))
     world))
 
 (defparameter *nucleated-sheep-world* (make-nucleated-sheep-world))
