@@ -51,7 +51,6 @@
    (canvas
     :accessor canvas
     :initform (make-instance 'gtk-drawing-area
-;                             :width-request 300 :height-request 200
                              :hexpand t :halign :fill :vexpand t :valign :fill))
    (x
     :initarg :x
@@ -101,26 +100,21 @@
                (declare (ignore widget))
                (let* ((cr (pointer cr))
                       (width (gtk-widget-get-allocated-width canvas))
-                      (height (gtk-widget-get-allocated-height canvas)))
-                 (gtk-label-set-text x-min-label
-                                     (format nil "~1$" (- x (/ (* .5 width)
-                                                               zoom))))
-                 (gtk-label-set-text x-max-label
-                                     (format nil "~1$" (+ x (/ (* .5 width)
-                                                               zoom))))
-                 (gtk-label-set-text y-min-label
-                                     (format nil "~1$" (- y (/ (* .5 height)
-                                                               zoom))))
-                 (gtk-label-set-text y-max-label
-                                     (format nil "~1$" (+ y (/ (* .5 height)
-                                                               zoom))))
+                      (height (gtk-widget-get-allocated-height canvas))
+                      (x-min (- x (/ (* .5 width) zoom)))
+                      (x-max (+ x (/ (* .5 width) zoom)))
+                      (y-min (- y (/ (* .5 height) zoom)))
+                      (y-max (+ y (/ (* .5 height) zoom))))
+                 (gtk-label-set-text x-min-label (format nil "~1$" x-min))
+                 (gtk-label-set-text x-max-label (format nil "~1$" x-max))
+                 (gtk-label-set-text y-min-label (format nil "~1$" y-min))
+                 (gtk-label-set-text y-max-label (format nil "~1$" y-max))
                  (gtk-label-set-text zoom-label
                                      (format nil "Zoom: ~1$%" (* 100.0 zoom)))
-                 (cairo-translate cr 0
-                                  (+ height))
-                 (cairo-translate cr
-                                  (* .5 width) (* -.5 height))
+                 (cairo-translate cr 0 (+ height))
+                 (cairo-translate cr (* .5 width) (* -.5 height))
                  (cairo-scale cr (zoom viewer) (- zoom))
+                 (cairo-translate cr (- x) (- y))
                  (cairo-set-source-rgb cr 0.0 0.0 0.2)
                  (cairo-paint cr)
                  (cairo-set-source-rgb cr 0.1 0.7 0.0)
@@ -165,19 +159,29 @@
   (declare (ignore initargs column-types column-types-p))
   (with-slots (environment runningp start-stop-button step-button
                            time-label) window
-    (let ((grid (gtk-grid-new))
-          (viewer (environment-viewer-new environment 1))
-          (animation-box (make-instance 'gtk-box 
-                                        :orientation :horizontal
-                                        :homogeneous t
-                                        :width-request 200))
-          (time-box (make-instance 'gtk-box 
-                                   :orientation :horizontal
-                                   :homogeneous nil
-                                   :width-request 200)))
+    (let* ((grid (gtk-grid-new))
+           (viewer (environment-viewer-new environment 1))
+           (animation-box (make-instance 'gtk-box 
+                                         :orientation :horizontal
+                                         :homogeneous t
+                                         :width-request 200))
+           (time-box (make-instance 'gtk-box 
+                                    :orientation :horizontal
+                                    :homogeneous nil
+                                    :width-request 200))
+           (width (gtk-widget-get-allocated-width (canvas viewer)))
+           (height (gtk-widget-get-allocated-height (canvas viewer))))
       (labels ((start-animation ()
                  (g-timeout-add (floor (* 1000 (time-step environment)))
                                 #'update-all))
+                      (width (gtk-widget-get-allocated-width canvas))
+                      (height (gtk-widget-get-allocated-height canvas))
+               (map-up () (incf (y viewer) (/ 50 (zoom viewer))))
+               (map-down () (decf (y viewer) (/ 50 (zoom viewer))))
+               (map-right () (incf (x viewer) (/ 50 (zoom viewer))))
+               (map-left () (decf (x viewer) (/ 50 (zoom viewer))))
+               (zoom-in () (setf (zoom viewer) (* 4/3 (zoom viewer))))
+               (zoom-out () (setf (zoom viewer) (* 3/4 (zoom viewer))))
                (update-all (&optional widget)
                  (declare (ignore widget))
                  (update environment)
@@ -191,7 +195,7 @@
         (gtk-box-pack-start animation-box step-button)
         (gtk-grid-attach grid animation-box 1 0 1 1)
         (gtk-box-pack-end time-box time-label)
-        (gtk-box-pack-end time-box (make-instance 'gtk-label 
+        (gtk-box-pack-end time-box (make-instance 'gtk-label
                                                   :label "Time: "
                                                   :valign :end
                                                   :halign :end))
@@ -206,10 +210,28 @@
                           (lambda (widget)
                             (declare (ignore widget))
                             (update-all)))
+        (g-signal-connect window "key-press-event"
+                          (lambda (widget event)
+                            (declare (ignore widget))
+                            (let ((code (gdk-event-key-keyval event)))
+                              (setf cl-user::examine (cons code cl-user::examine))
+                              (case code
+                                (65362 (map-up))
+                                (65364 (map-down))
+                                (65363 (map-right))
+                                (65361 (map-left))
+                                (119 (zoom-in))
+                                (115 (zoom-out))
+                                ))
+                            ;(incf (x viewer) 20)
+                            ;(incf (zoom viewer) .1)
+                            t))
         (g-signal-connect window "destroy" (lambda (widget)
                                              (declare (ignore widget))
                                              (setf runningp nil)
                                              (leave-gtk-main)))))))
 
 (defun environment-control-new (environment)
-  (make-instance 'environment-control :environment environment))
+  (make-instance 'environment-control :environment environment
+                 :width-request 1360
+                 :height-request 700))

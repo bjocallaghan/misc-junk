@@ -4,6 +4,8 @@
 
 (in-package :village)
 
+(defparameter cl-user::examine nil)
+
 ;;; poor man's system definition -- i'll need to revamp this later
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defconstant +target-fps+ 30.0)
