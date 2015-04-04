@@ -1,11 +1,17 @@
 (in-package :village)
 
+(defparameter *parent-lines-visible-p* nil)
+(defparameter *sheep-labels-visible-p* nil)
+(defparameter *heading-indicators-visible-p* nil)
+(defparameter *color-sheep-by-status-p* t)
+
 (defgeneric add-actor (environment actor))
 (defgeneric draw (cr object))
 (defgeneric draw-label (cr actor))
 (defgeneric draw-heading-indicator (cr object))
 (defgeneric herd (sheep))
 (defgeneric expiredp (behavior current-time))
+(defgeneric evaluate-situation (mover))
 
 (defclass actor (wired-object)
   ((x
@@ -26,8 +32,7 @@
     :initform nil)))
 
 (defclass mover (actor)
-  (
-   (behavior
+  ((behavior
     :accessor behavior
     :initform nil)
    (heading
@@ -36,8 +41,7 @@
    (max-speed
     :initarg :max-speed
     :accessor max-speed
-    :initform (error "must supply a max speed"))
-))
+    :initform (error "must supply a max speed"))))
 
 (defclass sheep (mover)
   ((name
@@ -64,7 +68,8 @@
     :initform (error "must supply parent"))))
 
 (defmethod herd ((sheep sheep))
-  (actors (environment sheep)))
+  (remove-if-not (lambda (x) (eq 'sheep (type-of x)))
+                 (actors (environment sheep))))
 
 (defmethod update ((mover mover))
   (with-slots (x y max-speed environment heading behavior) mover
@@ -103,8 +108,6 @@
 (defmethod expiredp ((behavior behavior) current-time)
   (>= current-time (expiration behavior)))
 
-(defgeneric evaluate-situation (mover))
-
 (defmethod evaluate-situation ((sheep sheep))
   (let* ((others (remove-if (lambda (x) (eq x sheep)) (herd sheep)))
          (nearest (car (sort others #'< :key (lambda (x) (distance x sheep)))))
@@ -131,18 +134,12 @@
   (with-slots (status behavior heading environment parent) baby
     (let ((distance-to-parent (distance parent baby))
           (current-time (runtime environment)))
-      (setf status (cond
-                     ((> distance-to-parent 40) :separated)
-                     ((> distance-to-parent 30) :too-far)
-                     (t :content)))
-      (setf behavior
-            (case status
-              (:content (behavior-new "meandering" .4 (+ 4 current-time)
-                                      (make-meander-fn heading)))
-              (:separated (behavior-new "separated" .7 (+ 1 current-time)
-                                        (make-meander-fn heading)))
-              (:too-far (behavior-new "returning" .6 (+ 1 current-time)
-                                        (make-seek-fn baby parent))))))))
+      (setf status (if (< distance-to-parent 30) :content :too-far))
+      (setf behavior (if (eq status :content)
+                         (behavior-new "meandering" .4 (+ 4 current-time)
+                                      (make-meander-fn heading))
+                         (behavior-new "returning" .6 (+ 1 current-time)
+                                        (make-seek-fn baby parent)))))))
 
 (defmethod update ((sheep sheep))
   (with-slots (environment behavior expiration) sheep
@@ -188,12 +185,13 @@
                    (:lonely light-blue)
                    (:isolated dark-blue)
                    (otherwise white))))
+      (unless *color-sheep-by-status-p* (setf color white))
       (cairo-translate cr x y)
       (let ((head-size (* .5 size))
             (head-location (* .9 size)))
 
-        ;(draw-heading-indicator cr sheep)
-        ;(draw-label cr sheep)
+        (when *heading-indicators-visible-p* (draw-heading-indicator cr sheep))
+        (when *sheep-labels-visible-p* (draw-label cr sheep))
 
         ;;; draw body
         (cairo-rotate cr heading)
@@ -211,6 +209,18 @@
         (cairo-circle cr head-location 0 head-size)
         (cairo-fill cr))))
   (cairo-restore cr))
+
+(defmethod draw (cr (baby baby-sheep))
+  (when *parent-lines-visible-p*
+    (with-slots (x y parent) baby
+      (let ((parent-x (x parent))
+            (parent-y (y parent)))
+        (cairo-set-line-width cr 2)
+        (cairo-set-source-color cr purple)
+        (cairo-move-to cr x y)
+        (cairo-line-to cr parent-x parent-y)
+        (cairo-stroke cr))))
+  (call-next-method))
 
 (defmethod draw-heading-indicator (cr (mover mover))
   (cairo-set-source-color cr purple)
@@ -233,6 +243,7 @@
   (cairo-move-to cr (+ 5 x) (+ 5 y))
   (cairo-select-font-face cr "serif" 0 1)
   (cairo-set-font-size cr 10.0)
+  (cairo-set-source-color cr black)
   (cairo-show-text cr text)
   (cairo-restore cr))
 
