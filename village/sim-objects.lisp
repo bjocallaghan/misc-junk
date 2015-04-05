@@ -1,7 +1,7 @@
 (in-package :village)
 
 (defparameter *parent-lines-visible-p* nil)
-(defparameter *sheep-labels-visible-p* nil)
+(defparameter *sheep-labels-visible-p* t)
 (defparameter *heading-indicators-visible-p* nil)
 (defparameter *color-sheep-by-status-p* t)
 
@@ -12,6 +12,8 @@
 (defgeneric herd (sheep))
 (defgeneric expiredp (behavior current-time))
 (defgeneric evaluate-situation (mover))
+(defgeneric collidedp (object-1 object-2))
+(defgeneric detect-collisions (environment))
 
 (defclass actor (wired-object)
   ((x
@@ -41,17 +43,22 @@
    (max-speed
     :initarg :max-speed
     :accessor max-speed
-    :initform (error "must supply a max speed"))))
+    :initform (error "must supply a max speed"))
+   (size
+    :initarg :size
+    :accessor size
+    :initform 5)
+   (alertedp
+    :accessor alertedp
+    :initform nil)))
 
 (defclass sheep (mover)
   ((name
     :initform 'sheep)
-   (size
-    :initarg :size
-    :accessor size
-    :initform (+ 5 (random 2)))
    (max-speed
     :initform 25)
+   (size
+    :initform (+ 5 (random 2)))
    (status
     :initarg :status
     :accessor status
@@ -142,9 +149,12 @@
                                         (make-seek-fn baby parent)))))))
 
 (defmethod update ((sheep sheep))
-  (with-slots (environment behavior expiration) sheep
-    (when (or (null behavior) (expiredp behavior (runtime environment)))
+  (with-slots (environment behavior expiration alertedp) sheep
+    (when (or (null behavior)
+              alertedp
+              (expiredp behavior (runtime environment)))
       (evaluate-situation sheep))
+    (setf alertedp nil)
     (call-next-method)))
 
 (defun make-meander-fn (&optional heading)
@@ -182,6 +192,7 @@
   (with-slots (x y heading status size) sheep
     (let ((color (case status
                    (:crowded red)
+                   (:alerted '(0.0 1.0 0.0))
                    (:lonely light-blue)
                    (:isolated dark-blue)
                    (otherwise white))))
@@ -234,8 +245,11 @@
 (defmethod draw-label (cr actor)
   (draw-text cr 0 0 (format nil "~a" actor)))
 
-(defmethod draw-label (cr (mover sheep))
-  (draw-text cr 0 0 (format nil "~a: ~a" (name mover) (status mover))))
+(defmethod draw-label (cr (sheep sheep))
+  (with-slots (name status behavior environment) sheep
+    (draw-text cr 0 0 (format nil "~a: ~a (~a ~1$)"
+                              name status (name behavior)
+                              (- (expiration behavior) (runtime environment))))))
 
 (defun draw-text (cr x y text)
   (cairo-save cr)
@@ -243,19 +257,16 @@
   (cairo-move-to cr (+ 5 x) (+ 5 y))
   (cairo-select-font-face cr "serif" 0 1)
   (cairo-set-font-size cr 10.0)
-  (cairo-set-source-color cr black)
+  (cairo-set-source-color cr purple)
   (cairo-show-text cr text)
   (cairo-restore cr))
 
-(declaim (inline distance))
+(declaim (inline distance bearing random-heading))
 (defun distance (one two)
   (sqrt (+ (expt (- (x one) (x two)) 2)
            (expt (- (y one) (y two)) 2))))
-
-(declaim (inline bearing))
 (defun bearing (self other)
   (atan (- (y other) (y self)) (- (x other) (x self))))
-
 (defun random-heading ()
   (random (* 2 pi)))
 
@@ -271,6 +282,7 @@
     :initarg :time-step
     :accessor time-step
     :initform (error "must specify time-step"))))
+
 
 (defclass bounded-environment (environment)
   ((x-min
@@ -292,8 +304,42 @@
 
 (defmethod update ((environment environment))
   (incf (runtime environment) (time-step environment))
-  (dolist (actor (actors environment)) (update actor)))
+  (dolist (actor (actors environment)) (update actor))
+  (detect-collisions environment))
 
 (defmethod add-actor ((environment environment) (actor actor))
   (setf (environment actor) environment)
   (setf (actors environment) (cons actor (actors environment))))
+
+;;; the math on these collision detection methods doesn't use object size, and
+;;; thus isn't 100% accurate, but it's reasonably fast and a pretty good
+;;; approximation (for now)
+
+(defparameter *collision-distance* 8)
+
+(defmethod collidedp ((actor-1 actor) (actor-2 actor))
+  (< (distance actor-1 actor-2) *collision-distance*))
+
+(defmethod detect-collisions ((environment environment))
+  "Returns a list of objects which are currently in a collision state. Checks
+collisions by walking down the list once (ordered by x coordinate), with each
+element doing a small walk of subsequent elements until the
+x-coordinate-distance exceeds the collision threshold. Still a lot of checks,
+but fewer than N-choose-2."
+  (labels ((check-collisions (primary list acc)
+             (if (or (null list)
+                     (> (- (x (car list)) (x primary)) *collision-distance*))
+                 acc
+                 (progn
+                   (when (<= (distance (car list) primary) *collision-distance*)
+                     (setf acc (cons (car list) acc))
+                     (check-collisions primary (cdr list) acc)))))
+           (walk-list (list)
+             (when list
+               ;(setf (status (car list)) :alerted)
+               (dolist (actor (check-collisions (car list) (cdr list) nil))
+                 (setf (status actor) :alerted)
+                 (setf (alertedp actor) t))
+               (walk-list (cdr list)))))
+    (walk-list (sort (copy-seq (actors environment))
+                     #'< :key (lambda (a) (x a))))))
