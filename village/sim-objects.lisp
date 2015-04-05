@@ -329,14 +329,13 @@ but fewer than N-choose-2."
   (labels ((check-collisions (primary list acc)
              (if (or (null list)
                      (> (- (x (car list)) (x primary)) *collision-distance*))
-                 acc
+                 (when acc (cons primary acc))
                  (progn
                    (when (<= (distance (car list) primary) *collision-distance*)
                      (setf acc (cons (car list) acc))
                      (check-collisions primary (cdr list) acc)))))
            (walk-list (list)
              (when list
-               ;(setf (status (car list)) :alerted)
                (dolist (actor (check-collisions (car list) (cdr list) nil))
                  (setf (status actor) :alerted)
                  (setf (alertedp actor) t))
