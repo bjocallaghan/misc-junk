@@ -1,9 +1,10 @@
-from Tkinter import Tk, Canvas, Entry, Frame, Label, RIGHT, END
+import Tkinter
+from Tkinter import Tk, Canvas, Entry, Frame, Label
 from time import sleep, time
 from random import randint, random
 import math
 
-NUM_BALLS = 60
+NUM_BALLS = 1
 
 MIN_RADIUS = 2
 MAX_RADIUS = 15
@@ -111,11 +112,11 @@ class FPS_Canvas(TimeStepCanvas):
     def pack(self):
         self.frame.pack()
         TimeStepCanvas.pack(self)
-        self.fps_readout.pack(side=RIGHT)
-        Label(self.frame, text="FPS:").pack(side=RIGHT)
+        self.fps_readout.pack(side=Tkinter.RIGHT)
+        Label(self.frame, text="FPS:").pack(side=Tkinter.RIGHT)
 
     def update_fps_readout(self, value):
-        self.fps_readout.delete(0, END)
+        self.fps_readout.delete(0, Tkinter.END)
         self.fps_readout.insert(0, '%.1f' % value)
 
     def update(self):
