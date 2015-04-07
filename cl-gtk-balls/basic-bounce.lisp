@@ -4,7 +4,7 @@
 
 (in-package :bounce)
 
-(defconstant +num-balls+ 150)
+(defparameter +num-balls+ 30)
 
 (defconstant +canvas-width+ 800)
 (defconstant +canvas-height+ 600)
@@ -126,3 +126,11 @@
        (gtk-box-pack-start box add-button)
        (gtk-widget-show-all window)
        (start-animation)))))
+
+(defun main ()
+  (within-main-loop
+    (let ((window (make-instance 'gtk-window
+;                                 :type :toplevel
+                                 :title "Bouncing Balls")))
+      (gtk-container-add window (gtk-label-new "hello windows 7 gtk world"))
+      (gtk-widget-show-all window))))

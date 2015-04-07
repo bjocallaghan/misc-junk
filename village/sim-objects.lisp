@@ -1,8 +1,8 @@
 (in-package :village)
 
-(defparameter *parent-lines-visible-p* nil)
+(defparameter *parent-lines-visible-p* t)
 (defparameter *sheep-labels-visible-p* t)
-(defparameter *heading-indicators-visible-p* nil)
+(defparameter *heading-indicators-visible-p* t)
 (defparameter *color-sheep-by-status-p* t)
 
 (defgeneric add-actor (environment actor))
@@ -14,6 +14,15 @@
 (defgeneric evaluate-situation (mover))
 (defgeneric collidedp (object-1 object-2))
 (defgeneric detect-collisions (environment))
+
+(declaim (inline distance bearing random-heading))
+(defun distance (one two)
+  (sqrt (+ (expt (- (x one) (x two)) 2)
+           (expt (- (y one) (y two)) 2))))
+(defun bearing (self other)
+  (atan (- (y other) (y self)) (- (x other) (x self))))
+(defun random-heading ()
+  (random (* 2 pi)))
 
 (defclass actor (wired-object)
   ((x
@@ -260,15 +269,6 @@
   (cairo-set-source-color cr purple)
   (cairo-show-text cr text)
   (cairo-restore cr))
-
-(declaim (inline distance bearing random-heading))
-(defun distance (one two)
-  (sqrt (+ (expt (- (x one) (x two)) 2)
-           (expt (- (y one) (y two)) 2))))
-(defun bearing (self other)
-  (atan (- (y other) (y self)) (- (x other) (x self))))
-(defun random-heading ()
-  (random (* 2 pi)))
 
 (defclass environment ()
   ((actors
