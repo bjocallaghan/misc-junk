@@ -85,6 +85,21 @@
                    :dy (random-integer 10 300)
                    :color (random-color))))
 
+(defun random-density-ball ()
+  "Create a ball with random density. Darker color indicates higher density."
+  (let* ((radius 15)
+         (value (+ .1 (random .8)))
+         (density (+ .5 (- 1 value)))
+         (color (list value value value)))
+    (make-instance 'ball
+                   :density density
+                   :radius radius
+                   :x (random-integer radius (- +canvas-width+ radius))
+                   :y (random-integer radius (- +canvas-height+ radius))
+                   :dx (random-integer 10 300)
+                   :dy (random-integer 10 300)
+                   :color color)))
+
 (defmethod mass ((ball ball))
   (with-slots (radius density) ball
     (* pi radius radius density)))
@@ -157,6 +172,9 @@
       (with-slots (dx dy) ball-2
         (setf dx new-dx-2)
         (setf dy new-dy-2)))
+    ;; the following loop guarantees balls don't get "stuck" inside each other,
+    ;; but it also is a source of unreality and can sometimes create weird
+    ;; visual glitches
     (loop
        do (progn (update ball-1) (update ball-2))
        while (overlapp ball-1 ball-2))))
@@ -181,73 +199,74 @@
 
 (defun main ()
   (within-main-loop
-    (let ((runningp nil)
-          (balls (loop repeat +num-balls+ collect (random-ball)))
-          (window (make-instance 'gtk-window
-                                 :type :toplevel
-                                 :title "Bouncing Balls"))
-          (canvas (make-instance 'gtk-drawing-area
-                                 :width-request +canvas-width+
-                                 :height-request +canvas-height+))
-          (box (gtk-box-new :vertical 2))
-          (energy-label (gtk-label-new "<uninit>"))
-          (start-button (gtk-button-new-with-label "Start"))
-          (stop-button (gtk-button-new-with-label "Stop"))
-          (step-button (gtk-button-new-with-label "Step"))
-          (add-button (gtk-button-new-with-label "Add")))
-      (labels ((start-animation ()
-                 (g-timeout-add (floor (* 1000 +time-step+)) #'update-all))
-               (update-all (&optional widget)
-                 (declare (ignore widget))
-                 (dolist (ball balls) (update ball))
-                 (gtk-widget-queue-draw canvas)
-                 (do-collisions balls)
-                 (let ((text (format nil "Total system energy: ~2$"
-                                     (reduce #'+(mapcar #'energy balls)))))
-                   (gtk-label-set-text energy-label text))
-                 runningp))
-        (g-signal-connect window "destroy" (lambda (widget)
-                                             (declare (ignore widget))
-                                             (leave-gtk-main)))
-        (g-signal-connect start-button "clicked"
-                          (lambda (widget)
-                            (declare (ignore widget))
-                            (unless runningp
-                              (setf runningp t)
-                              (start-animation))))
-        (g-signal-connect stop-button "clicked"
-                          (lambda (widget)
-                            (declare (ignore widget))
-                            (setf runningp nil)))
-        (g-signal-connect step-button "clicked"
-                          (lambda (widget)
-                            (declare (ignore widget))
-                            (update-all)
-                            (setf runningp nil)))
-        (g-signal-connect add-button "clicked"
-                          (lambda (widget)
-                            (declare (ignore widget))
-                            (push (random-ball) balls)
-                            (gtk-widget-queue-draw canvas)
-                            t))
-        (g-signal-connect canvas "draw"
-                          (lambda (widget cr)
-                            (declare (ignore widget))
-                            (let ((cr (pointer cr)))
-                              (cairo-set-source-rgb cr 1 1 1)
-                              (cairo-paint cr)
-                              (dolist (ball balls) (draw cr ball))
-                              (cairo-destroy cr)
-                              t)))
-        (gtk-container-add window box)
-        (gtk-box-pack-start box canvas)
-        (gtk-box-pack-start box start-button)
-        (gtk-box-pack-start box stop-button)
-        (gtk-box-pack-start box step-button)
-        (gtk-box-pack-start box add-button)
-        (gtk-box-pack-start box energy-label)
-        (gtk-widget-show-all window)
-        (start-animation)))))
+    (let ((new-ball-fn #'random-density-ball))
+      (let ((runningp nil)
+            (balls (loop repeat +num-balls+ collect (random-density-ball)))
+            (window (make-instance 'gtk-window
+                                   :type :toplevel
+                                   :title "Bouncing Balls"))
+            (canvas (make-instance 'gtk-drawing-area
+                                   :width-request +canvas-width+
+                                   :height-request +canvas-height+))
+            (box (gtk-box-new :vertical 2))
+            (energy-label (gtk-label-new "<uninit>"))
+            (start-button (gtk-button-new-with-label "Start"))
+            (stop-button (gtk-button-new-with-label "Stop"))
+            (step-button (gtk-button-new-with-label "Step"))
+            (add-button (gtk-button-new-with-label "Add")))
+        (labels ((start-animation ()
+                   (g-timeout-add (floor (* 1000 +time-step+)) #'update-all))
+                 (update-all (&optional widget)
+                   (declare (ignore widget))
+                   (dolist (ball balls) (update ball))
+                   (gtk-widget-queue-draw canvas)
+                   (do-collisions balls)
+                   (let ((text (format nil "Total system energy: ~2$"
+                                       (reduce #'+(mapcar #'energy balls)))))
+                     (gtk-label-set-text energy-label text))
+                   runningp))
+          (g-signal-connect window "destroy" (lambda (widget)
+                                               (declare (ignore widget))
+                                               (leave-gtk-main)))
+          (g-signal-connect start-button "clicked"
+                            (lambda (widget)
+                              (declare (ignore widget))
+                              (unless runningp
+                                (setf runningp t)
+                                (start-animation))))
+          (g-signal-connect stop-button "clicked"
+                            (lambda (widget)
+                              (declare (ignore widget))
+                              (setf runningp nil)))
+          (g-signal-connect step-button "clicked"
+                            (lambda (widget)
+                              (declare (ignore widget))
+                              (update-all)
+                              (setf runningp nil)))
+          (g-signal-connect add-button "clicked"
+                            (lambda (widget)
+                              (declare (ignore widget))
+                              (push (random-ball) balls)
+                              (gtk-widget-queue-draw canvas)
+                              t))
+          (g-signal-connect canvas "draw"
+                            (lambda (widget cr)
+                              (declare (ignore widget))
+                              (let ((cr (pointer cr)))
+                                (cairo-set-source-rgb cr 1 1 1)
+                                (cairo-paint cr)
+                                (dolist (ball balls) (draw cr ball))
+                                (cairo-destroy cr)
+                                t)))
+          (gtk-container-add window box)
+          (gtk-box-pack-start box canvas)
+          (gtk-box-pack-start box start-button)
+          (gtk-box-pack-start box stop-button)
+          (gtk-box-pack-start box step-button)
+          (gtk-box-pack-start box add-button)
+          (gtk-box-pack-start box energy-label)
+          (gtk-widget-show-all window)
+          (start-animation))))))
 
 ;;; for specific tests
 
