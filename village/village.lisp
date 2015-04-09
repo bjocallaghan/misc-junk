@@ -12,8 +12,8 @@
   (defconstant +time-step+ (/ +target-fps+))
 
   (dolist (part-name '(
-                       "wiring"
                        "cairo-module"
+                       "wiring"
                        "sim-objects"
                        "village-gtk-gui"
                        "premade-worlds"
@@ -29,5 +29,6 @@
 
 (defun main ()
   (within-main-loop
-    (let ((window (environment-control-new *nucleated-sheep-world*)))
+    (let ((window (environment-control-new *medium-herd-world*)))
+    ;(let ((window (environment-control-new *nucleated-herd-world*)))
        (gtk-widget-show-all window))))

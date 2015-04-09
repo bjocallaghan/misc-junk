@@ -3,13 +3,23 @@
 (defun make-medium-herd-world ()
   (let ((world (make-instance 'bounded-environment :time-step +time-step+
                               :x-min 0 :y-min 0 :x-max 700 :y-max 500)))
+    (add-actor world (make-instance 'dog :x 0 :y 0))
     (dotimes (i 20)
       (let ((x (+ 50 (random 600)))
             (y (+ 50 (random 400))))
         (add-actor world (make-instance 'sheep :x x :y y))))
     world))
-
 (defparameter *medium-herd-world* (make-medium-herd-world))
+
+(defun make-giant-herd-world ()
+  (let ((world (make-instance 'bounded-environment :time-step +time-step+
+                              :x-min 0 :y-min 0 :x-max 7000 :y-max 5000)))
+    (dotimes (i 200)
+      (let ((x (+ 100 (random 6900)))
+            (y (+ 100 (random 4900))))
+        (add-actor world (make-instance 'sheep :x x :y y))))
+    world))
+(defparameter *giant-herd-world* (make-giant-herd-world))
 
 (defun make-two-crowded-sheep-world ()
   (let ((world (make-instance 'bounded-environment :time-step +time-step+
@@ -17,10 +27,9 @@
     (add-actor world (make-instance 'sheep :x 300 :y 300))
     (add-actor world (make-instance 'sheep :x 305 :y 300))
     world))
-
 (defparameter *two-crowded-sheep-world* (make-two-crowded-sheep-world))
 
-(defun make-nucleated-sheep-world ()
+(defun make-nucleated-herd-world ()
   (let ((world (make-instance 'bounded-environment :time-step +time-step+
                               :x-min 0 :y-min 0 :x-max 400 :y-max 400)))
     (dotimes (i 1) (add-actor world (make-instance 'sheep :x (+ i 4) :y 4)))
@@ -34,5 +43,4 @@
             (add-actor world (make-instance 'baby-sheep
                                             :x x :y y :parent mama))))))
     world))
-
-(defparameter *nucleated-sheep-world* (make-nucleated-sheep-world))
+(defparameter *nucleated-herd-world* (make-nucleated-herd-world))

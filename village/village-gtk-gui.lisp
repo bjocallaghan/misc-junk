@@ -149,7 +149,14 @@
    (time-label
     :accessor time-label
     :initform (make-instance 'gtk-label :label "<unset>"
-                             :valign :end :halign :start)))
+                             :valign :end :halign :start))
+   (wall-time-label
+    :accessor wall-time-label
+    :initform (make-instance 'gtk-label :label "<unset>"
+                             :valign :end :halign :start))
+   (wall-time-start
+    :accessor wall-time-start
+    :initform (g-get-real-time)))
   (:metaclass gobject-class))
 
 (defmethod initialize-instance :after ((window environment-control)
@@ -158,7 +165,7 @@
                                          &allow-other-keys)
   (declare (ignore initargs column-types column-types-p))
   (with-slots (environment runningp start-stop-button step-button
-                           time-label) window
+                           time-label wall-time-label) window
     (let* ((grid (gtk-grid-new))
            (viewer (environment-viewer-new environment 1))
            (animation-box (make-instance 'gtk-box 
@@ -168,7 +175,11 @@
            (time-box (make-instance 'gtk-box 
                                     :orientation :horizontal
                                     :homogeneous nil
-                                    :width-request 200)))
+                                    :width-request 200))
+           (wall-time-box (make-instance 'gtk-box 
+                                         :orientation :horizontal
+                                         :homogeneous nil
+                                         :width-request 200)))
       (labels ((start-animation ()
                  (g-timeout-add (floor (* 1000 (time-step environment)))
                                 #'update-all))
@@ -188,6 +199,9 @@
                  (gtk-widget-queue-draw viewer)
                  (gtk-label-set-text time-label
                                      (format nil "~2$" (runtime environment)))
+                 (gtk-label-set-text wall-time-label
+                                     (format nil "~2$" (/ (- (g-get-real-time)
+                                                                 (wall-time-start window)) 1000000)))
                  runningp))
         (gtk-container-add window grid)
         (gtk-grid-attach grid viewer 0 0 1 2)
@@ -195,11 +209,17 @@
         (gtk-box-pack-start animation-box step-button)
         (gtk-grid-attach grid animation-box 1 0 1 1)
         (gtk-box-pack-end time-box time-label)
+        (gtk-box-pack-end wall-time-box wall-time-label)
         (gtk-box-pack-end time-box (make-instance 'gtk-label
                                                   :label "Time: "
                                                   :valign :end
                                                   :halign :end))
+        (gtk-box-pack-end wall-time-box (make-instance 'gtk-label
+                                                       :label "Wall: "
+                                                       :valign :end
+                                                       :halign :end))
         (gtk-grid-attach grid time-box 1 1 1 1)
+        (gtk-grid-attach grid wall-time-box 1 2 1 1)
         (start-animation)
         (g-signal-connect start-stop-button "clicked" #'pause-resume)
         (g-signal-connect step-button "clicked"
