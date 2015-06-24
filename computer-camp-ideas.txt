@@ -1,0 +1,34 @@
+Python/Programming
+  Hello World -- an introductory programming book geared toward teens
+  Modifying animation code -- games
+  Doing some math problems?
+  Goal seek -- strategies for brute force
+  Sports scores/stats (intro to csv files)
+
+Building a computer
+  Tear-down/rebuild desktop
+  Open up old chrome-book
+  Look inside broken Nook
+
+Art/Design
+  Blender short-course
+  Inkscape short-course
+  GIMP short-course
+
+Spreadsheets
+  Sports scores/stats -- show Grandpa new skillz
+
+Visit to work
+  See how the professionals do it! YEAH!
+
+Internet skills
+  Interacting/social
+    Etiquette
+    Safety
+    Scams
+    Hoaxes
+    Adult/disturbing content
+  Tools
+    Email
+    Social networking
+  Research/resources
